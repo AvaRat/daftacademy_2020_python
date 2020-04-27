@@ -40,21 +40,21 @@ def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials
 
-@app.get("/")
-async def main_page():
-    response = RedirectResponse(url='/login')
-    return response
+#@app.get("/")
+#async def main_page():
+#    response = RedirectResponse(url='/login')
+#    return response
 
+@app.post("/login")
 @app.get("/login")
 def read_current_user(credentials: str = Depends(get_current_username)):
     response = RedirectResponse(url='/welcome')
     user = credentials.username
     session_manager.new_session(user)
     response.set_cookie('username', user, max_age=40)
-    #response.set_cookie('passwd_hash', hash(credentials.password), max_age=40)
     return response
 
-@app.get("/welcome/")
+@app.get("/welcome")
 async def read_items(*, username: str = Cookie(None)):
     return {"init time": session_manager.get_session_time(username), "current user": username}
 
