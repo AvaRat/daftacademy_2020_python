@@ -1,8 +1,13 @@
 import secrets
 
-from starlette.responses import RedirectResponse, Response
 from fastapi import Depends, FastAPI, HTTPException, status, Response, Cookie
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+
+class UserCredentials(BaseModel):
+    username: str
+    password: str
 
 class SessionManager:
     def __init__(self):
@@ -13,17 +18,16 @@ class SessionManager:
 
         now = datetime.now()
         current_time = now.strftime("%m/%d/%Y, %H:%M:%S")
-        self.data_base[hash(username)] = current_time
+        self.data_base[username] = current_time
     
     def get_session_time(self, username):
-        return self.data_base[hash(username)]
+        return self.data_base[username]
 
 DB = {} #normal dict for now is fine
 app = FastAPI()
 session_manager = SessionManager()
 
 DB['session_manager']=session_manager
-DB['users_data']=[{'username':'trudnY', 'password':'PaC13Nt'}]
 
 security = HTTPBasic()
 
@@ -40,32 +44,26 @@ def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials
 
-#@app.get("/")
-#async def main_page():
-#    response = RedirectResponse(url='/login')
-#    return response
 
 @app.post("/login")
-@app.get("/login")
-def read_current_user(credentials: str = Depends(get_current_username)):
-    response = RedirectResponse(url='/welcome')
+async def login(credentials: get_current_username = Depends() ):
     user = credentials.username
     session_manager.new_session(user)
-    response.set_cookie('username', user, max_age=40)
+    response = RedirectResponse(url='/welcome', status_code=301)
+    response.set_cookie(key="session_id", value=user, max_age=40)
     return response
+    
+async def verify_cookie(session_id: str = Cookie(None)):
+    if session_id==None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="session not initialized",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return session_id
+
+
 
 @app.get("/welcome")
-async def read_items(*, username: str = Cookie(None)):
-    return {"init time": session_manager.get_session_time(username), "current user": username}
-
-#@app.post("/cookie-and-object/")
-#def create_cookie(response: Response):
-#    response.set_cookie(key="fakesession", value="fake-cookie-session-value")
-#    return {"message": "Come to the dark side, we have cookies"}
-
-#@app.get('/get_cookie')
-#async def get_cookie():
-#    response = Response('you received a cookie', status_code=200, headers=None, media_type=None)
-#    response.set_cookie('username','Marcel1928')
-#    return response
-
+async def welcome_screen(session_id: str = Depends(verify_cookie)):
+    return {"init time": session_manager.get_session_time(session_id), "current user": session_id}
