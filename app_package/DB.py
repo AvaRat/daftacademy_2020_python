@@ -20,6 +20,11 @@ class Tracks(BaseModel):
     Bytes: Optional[int]
     UnitPrice: float
 
+class Album_in(BaseModel):
+    title: str
+    artist_id: int
+
+
 app = FastAPI()
 
 
@@ -46,6 +51,20 @@ async def get_tracks_composers(composer_name: str):
     response = JSONResponse(content={'detail':{'error':'Composer not found'}}, status_code=status.HTTP_404_NOT_FOUND)
     return response
     
+@app.post("/albums", status_code=201)
+async def add_new_album(album: Album_in):
+    cursor = await app.db_connection.execute("SELECT * FROM artists WHERE ArtistId==?", [album.artist_id])
+    artists = await cursor.fetchall()
+    if(len(artists) == 0):
+        response = JSONResponse(content={'detail':{'error':'Artist with given ID not found'}}, status_code=status.HTTP_404_NOT_FOUND)
+        return response
+    cursor = await app.db_connection.execute("INSERT INTO albums (Title, ArtistId) VALUES (?, ?)", (album.title, album.artist_id))
+    await app.db_connection.commit()
+    added_id = cursor.lastrowid
+    logger.error(added_id)
+    cursor = await app.db_connection.execute("SELECT * FROM albums WHERE AlbumId==?", [added_id])
+    album = await cursor.fetchone()
+    return album
 
 
 @app.on_event("shutdown")
