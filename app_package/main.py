@@ -2,7 +2,7 @@ import secrets
 
 from fastapi import Depends, FastAPI, HTTPException, status, Response, Cookie
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel
 
 class UserCredentials(BaseModel):
@@ -22,6 +22,9 @@ class SessionManager:
     
     def get_session_time(self, username):
         return self.data_base[username]
+    
+    def quit_session(self, username):
+        del self.data_base[username]
 
 DB = {} #normal dict for now is fine
 app = FastAPI()
@@ -45,23 +48,38 @@ def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
     return credentials
 
 
-@app.post("/login")
-async def login(credentials: get_current_username = Depends() ):
-    user = credentials.username
-    session_manager.new_session(user)
-    response = RedirectResponse(url='/welcome', status_code=301)
-    response.set_cookie(key="session_id", value=user, max_age=40)
-    return response
-    
+
 async def verify_cookie(session_id: str = Cookie(None)):
     if session_id==None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="session not initialized",
-            headers={"WWW-Authenticate": "Basic"},
+            detail="session not initialized, you need to log in",
         )
     return session_id
 
+@app.post("/logout")
+async def logout(session_id: str = Depends(verify_cookie)):
+    session_manager.quit_session(session_id)
+    response = RedirectResponse(url='/', status_code=301)
+    response.delete_cookie(key="session_id")
+    return response
+
+@app.get("/")
+async def main_page():
+    return {"message":"elo "}
+
+@app.get("/patient")
+async def patient(session_id: str = Depends(verify_cookie)):
+    return {"message": "siema "+session_id}
+
+@app.post("/login")
+async def login(credentials: get_current_username = Depends()):
+    user = credentials.username
+    session_manager.new_session(user)
+    response = RedirectResponse(url='/welcome', status_code=301)
+    response.set_cookie(key="session_id", value=user, max_age=120)
+    return response
+    
 
 
 @app.get("/welcome")
