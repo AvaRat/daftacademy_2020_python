@@ -66,6 +66,12 @@ async def add_new_album(album: Album_in):
     album = await cursor.fetchone()
     return album
 
+@app.get("/albums{album_id}")
+async def get_album_by_id(album_id: int):
+    cursor = await app.db_connection.execute("SELECT * FROM albums WHERE AlbumId==?", [album_id])
+    album = await cursor.fetchone()
+    return album
+
 
 @app.on_event("shutdown")
 async def shutdown():
