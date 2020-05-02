@@ -33,7 +33,7 @@ async def startup():
 
 @app.get("/tracks", response_model=List[Tracks])
 async def get_tracks(page: int = 0, per_page: int = 10):
-    cursor = await app.db_connection.execute("SELECT * FROM tracks ORDER BY TrackId LIMIT ? OFFSET ?;", (per_page, page-1))
+    cursor = await app.db_connection.execute("SELECT * FROM tracks ORDER BY TrackId LIMIT ? OFFSET ?;", (per_page, page*per_page))
     tracks = await cursor.fetchall()
     return tracks
 
