@@ -173,7 +173,7 @@ async def get_sales_stats(category: str):
                                                     JOIN tracks T ON T.TrackId=I_I.TrackId \
                                                     JOIN genres G ON G.GenreId=T.GenreId \
                                                     GROUP BY G.GenreId  \
-                                                    ORDER BY SUM(I.Total) DESC, G.Name")
+                                                    ORDER BY SUM(I_I.Quantity) DESC, G.Name")
         sales_list = await cursor.fetchall()
         return sales_list
 
