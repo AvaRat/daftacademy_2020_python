@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 import aiosqlite
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -80,6 +80,9 @@ class SalesSimple(BaseModel):
     @validator("Sum")
     def round_up_sum(cls, Sum):
         return round(Sum, 2)
+class SalesGenre(BaseModel):
+    Name: str
+    Sum: int
 
 
 app = FastAPI()
@@ -155,16 +158,51 @@ async def add_customer(customer_id: int, customer_update: CustomerIn):
     return JSONResponse(content=jsonable_encoder(customer_out, by_alias=False))
 
 
-@app.get("/sales", response_model=List[SalesSimple])
+@app.get("/sales", response_model=Union[List[SalesSimple], List[SalesGenre]])
 async def get_sales_stats(category: str):
-    if(category != 'customers'):
-        response = JSONResponse(content={'detail':{'error':'Resource not found'}}, status_code=status.HTTP_404_NOT_FOUND)
-        return response
+    if(category == 'customers'):
+        cursor = await app.db_connection.execute("SELECT C.CustomerId, C.Email, C.Phone, SUM(I.Total) AS Sum \
+                                                    FROM customers C INNER JOIN invoices I ON C.CustomerId=I.CustomerId \
+                                                    GROUP BY C.CustomerId ORDER BY SUM(I.Total) DESC, C.CustomerId ")
+        sales_list = await cursor.fetchall()
+        return sales_list
+    elif(category == 'genres'):
+        cursor = await app.db_connection.execute("SELECT G.Name, SUM(I_I.Quantity) AS Sum, SUM(I.Total) AS TotalInvoiced \
+                                                    FROM invoices I \
+                                                    JOIN invoice_items I_I ON I_I.InvoiceId=I.InvoiceId \
+                                                    JOIN tracks T ON T.TrackId=I_I.TrackId \
+                                                    JOIN genres G ON G.GenreId=T.GenreId \
+                                                    GROUP BY G.GenreId  \
+                                                    ORDER BY SUM(I.Total) DESC, G.Name")
+        sales_list = await cursor.fetchall()
+        return sales_list
+
+    response = JSONResponse(content={'detail':{'error':'Resource not found'}}, status_code=status.HTTP_404_NOT_FOUND)
+    return response
+
+@app.get("/compare")
+async def compare():
     cursor = await app.db_connection.execute("SELECT C.CustomerId, C.Email, C.Phone, SUM(I.Total) AS Sum \
-                                                FROM customers C INNER JOIN invoices I ON C.CustomerId=I.CustomerId \
+                                                FROM customers C  JOIN invoices I ON C.CustomerId=I.CustomerId \
                                                 GROUP BY C.CustomerId ORDER BY SUM(I.Total) DESC, C.CustomerId ")
     sales_list = await cursor.fetchall()
-    return sales_list
+
+    cursor = await app.db_connection.execute("SELECT CustomerId, Email, Phone, SUM(Total) AS Sum \
+                                                FROM( \
+	                                            SELECT * FROM invoices  \
+	                                            JOIN customers ON customers.CustomerId = invoices.CustomerId \
+                                                )GROUP BY CustomerId  \
+                                                ORDER BY Sum DESC, CustomerId")
+    sales_list_2 = await cursor.fetchall()
+    s1 = set(sales_list)
+    s2 = set(sales_list_2)
+
+    for a1,a2 in zip(sales_list, sales_list_2):
+        for k1,k2 in zip(a1.keys(), a2.keys()):
+            if(a1[k1] != a2[k2]):
+                logger.error('DIFFERENT')
+
+    logger.info("THE SAME")
 
 
 @app.on_event("shutdown")
