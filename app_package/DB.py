@@ -76,7 +76,7 @@ class SalesSimple(BaseModel):
     Email: str
     Phone: str = None
     Sum: float
-    
+
     @validator("Sum")
     def round_up_sum(cls, Sum):
         return round(Sum, 2)
@@ -162,7 +162,7 @@ async def get_sales_stats(category: str):
         return response
     cursor = await app.db_connection.execute("SELECT C.CustomerId, C.Email, C.Phone, SUM(I.Total) AS Sum \
                                                 FROM customers C INNER JOIN invoices I ON C.CustomerId=I.CustomerId \
-                                                GROUP BY C.CustomerId ")
+                                                GROUP BY C.CustomerId ORDER BY SUM(I.Total) DESC")
     sales_list = await cursor.fetchall()
     return sales_list
 
