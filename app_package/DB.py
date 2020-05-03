@@ -163,7 +163,7 @@ async def get_sales_stats(category: str):
     if(category == 'customers'):
         cursor = await app.db_connection.execute("SELECT C.CustomerId, C.Email, C.Phone, SUM(I.Total) AS Sum \
                                                     FROM customers C INNER JOIN invoices I ON C.CustomerId=I.CustomerId \
-                                                    GROUP BY C.CustomerId ORDER BY SUM(I.Total) DESC, C.CustomerId ")
+                                                    GROUP BY C.CustomerId ORDER BY ROUND(SUM(I.Total)) DESC, C.CustomerId ")
         sales_list = await cursor.fetchall()
         return sales_list
     elif(category == 'genres'):
