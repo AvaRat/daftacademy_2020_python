@@ -4,7 +4,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi.logger import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 
 
 # SQLAlchemy specific code, as with any other app
@@ -71,6 +71,17 @@ class Customer_DB(BaseModel):
     Email: str
     SupportRepId: int = None
 
+class SalesSimple(BaseModel):
+    CustomerId: int
+    Email: str
+    Phone: str = None
+    Sum: float
+    
+    @validator("Sum")
+    def round_up_sum(cls, Sum):
+        return round(Sum, 2)
+
+
 app = FastAPI()
 
 
@@ -130,15 +141,9 @@ async def add_customer(customer_id: int, customer_update: CustomerIn):
     customer_db = CustomerDB(**{k.lower():v for k,v in jsonable_encoder(customer[0]).items()})
     customer_dict = customer_db.dict(by_alias=True)
 
-
-
-
-
-
     for key in customer_update.__fields_set__:
          customer_dict[key] = customer_update.dict()[key]
     
-
     await app.db_connection.execute("UPDATE customers \
         SET company=?,  address=?, city=?, state=?, country=?, postalcode=?, fax=? \
         WHERE CustomerId==?", (customer_dict['company'], customer_dict['address'], customer_dict['city'], customer_dict['state'], 
@@ -148,6 +153,18 @@ async def add_customer(customer_id: int, customer_update: CustomerIn):
     logger.warn(customer_out.dict())
 
     return JSONResponse(content=jsonable_encoder(customer_out, by_alias=False))
+
+
+@app.get("/sales", response_model=List[SalesSimple])
+async def get_sales_stats(category: str):
+    if(category != 'customers'):
+        response = JSONResponse(content={'detail':{'error':'Resource not found'}}, status_code=status.HTTP_404_NOT_FOUND)
+        return response
+    cursor = await app.db_connection.execute("SELECT C.CustomerId, C.Email, C.Phone, SUM(I.Total) AS Sum \
+                                                FROM customers C INNER JOIN invoices I ON C.CustomerId=I.CustomerId \
+                                                GROUP BY C.CustomerId ")
+    sales_list = await cursor.fetchall()
+    return sales_list
 
 
 @app.on_event("shutdown")
